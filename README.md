@@ -29,8 +29,10 @@ The caller workflows are in `templates/workflows/`, and a `project.json` to star
 
 ### Repo settings and secrets
 
-- **Org variable `PIPELINE_OWNER`:** the person whose labels and comments start the agent, and who is asked to review each pull request.
-- **Org secret `ATTACHMENTS_TOKEN`:** contents read and write on the attachments repos.
+- **Repo variable `PIPELINE_OWNER`:** the person whose labels and comments start the agent, and who is asked to review each pull request. With it unset, nothing starts.
+- **Repo secret `ATTACHMENTS_TOKEN`:** contents read and write on the attachments repos. Without it, runs work but the agent doesn't get the ticket's images.
+
+Both are set on each repo, not on the organization: on GitHub Free, organization variables and secrets don't reach private repos' workflows, although the API lists them for those repos.
 - **`release` environment, limited to `main`:** `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_CONTENT`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`, and `TICKETKIT_GITHUB_TOKEN` for an app that files requests.
 - **Labels:** the pipeline's labels (`ai-request`, `ai-approved`, `ai-skip-review` and the `ai:*` states).
 - **Merges:** squash only, with the PR title and body as the message.
