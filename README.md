@@ -12,7 +12,7 @@ This repo holds the shared parts. Each app repo calls them, and supplies what on
 | `.github/workflows/housekeeping.yml` | Calls `housekeeping.yml` here daily and when issues or pull requests close |
 | `.github/workflows/release.yml` | Calls `release.yml` here on pushes to `main`, monthly and on demand |
 | `.agent/project.json` | What to build and what to protect; see below |
-| `scripts/verify.sh` | Builds and runs the tests. Given test names, runs only those and refuses anything else |
+| `scripts/verify.sh` | Builds and runs the tests. Given test names, runs only those and refuses anything else. `templates/verify.sh` does this from `project.json`; an app that needs more, such as GoTask's Firebase emulators, writes its own |
 | `CLAUDE.md` | The agent's instructions for this app, including its test targets and example test names |
 
 The caller workflows are in `templates/workflows/`, and a `project.json` to start from is in `templates/`. The project's `.gitignore` needs `.agent/run/` and `.build-number`.
@@ -23,6 +23,7 @@ The caller workflows are in `templates/workflows/`, and a `project.json` to star
 | --- | --- |
 | `xcodeproj`, `scheme` | What the release lane builds |
 | `bundle_id`, `team_id` | The app's identity, and the profile match fetches from `ios-certs` |
+| `unit_tests`, `ui_tests` | The test targets, for `templates/verify.sh` |
 | `attachments_repo` | The repo holding ticket images, in the same organization. Optional; the default is `<repo>-attachments` |
 | `protected` | Files the agent may not change, beyond the shared list (`scripts/`, `fastlane/`, `.github/`, `.claude/`, `.agent/project.json`, `CLAUDE.md`, `.mcp.json`). List the Xcode project file and anything else that runs code at build time |
 | `certificates_repo` | Optional; the default is `https://github.com/GoApps213/ios-certs.git` |
@@ -36,6 +37,18 @@ Both are set on each repo, not on the organization: on GitHub Free, organization
 - **`release` environment, limited to `main`:** `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_CONTENT`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`, and `TICKETKIT_GITHUB_TOKEN` for an app that files requests.
 - **Labels:** the pipeline's labels (`ai-request`, `ai-approved`, `ai-skip-review` and the `ai:*` states).
 - **Merges:** squash only, with the PR title and body as the message.
+
+## Adding a project
+
+```sh
+scripts/onboard.sh GoApps213/<repo> ~/dev/<repo>
+```
+
+It creates the labels, sets the Actions and merge settings, the `release` environment and `PIPELINE_OWNER`, and copies the templates into the checkout for any project files missing. It then lists what's left. A person still has to:
+
+- create the App Store Connect app record and run `fastlane match appstore --git_url https://github.com/GoApps213/ios-certs.git --app_identifier <bundle ID>`;
+- set the secrets;
+- add the repo to the app's GitHub token, after which GoBuild lists it as a project.
 
 ## How a run stays contained
 

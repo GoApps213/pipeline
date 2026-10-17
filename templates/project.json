@@ -3,6 +3,8 @@
   "scheme": "MyApp",
   "bundle_id": "com.cmak.myapp",
   "team_id": "H78L7CA28Q",
+  "unit_tests": "MyAppTests",
+  "ui_tests": "MyAppUITests",
   "attachments_repo": "attachments",
   "protected": ["MyApp/MyApp.xcodeproj/project.pbxproj"]
 }
