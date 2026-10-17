@@ -16,7 +16,8 @@ on:
 jobs:
   run:
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 60
+    # Two full verification runs of an app with UI tests take about half an hour on their own
+    timeout-minutes: 90
     steps:
       # Outside the project's checkout, so the agent's working tree never holds the pipeline
       - name: Get the pipeline
