@@ -1,0 +1,9 @@
+{
+  "default": "claude-code",
+  "models": [
+    {"id": "claude-code",   "name": "Claude Code (default model)", "adapter": "claude-code", "model": ""},
+    {"id": "claude-opus",   "name": "Claude Opus",   "adapter": "claude-code", "model": "opus"},
+    {"id": "claude-sonnet", "name": "Claude Sonnet", "adapter": "claude-code", "model": "sonnet"},
+    {"id": "claude-haiku",  "name": "Claude Haiku",  "adapter": "claude-code", "model": "haiku"}
+  ]
+}

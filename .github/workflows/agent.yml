@@ -1,0 +1,85 @@
+name: Agent
+# The number comes first so scripts/cancel.sh can find a ticket's runs
+run-name: "#${{ github.event.issue.number }} ${{ github.event.issue.title }}"
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    # Only you can start the agent, by:
+    #   - adding the ai-request or ai-approved label to an issue
+    #   - replying on a ticket that is waiting for your answer
+    #   - mentioning @agent in a comment on a pull request
+    # Comments the workflow posts come from the Actions bot, so they never retrigger it.
+    # Nothing starts for a closed ticket or pull request; closing a ticket is how it is cancelled.
+    # "You" is the PIPELINE_OWNER variable, since the repo's owner is an organization.
+    # With the variable unset, nothing starts.
+    if: >-
+      github.event.sender.login == vars.PIPELINE_OWNER && github.event.issue.state == 'open' && (
+        (github.event_name == 'issues' &&
+          (github.event.label.name == 'ai-request' || github.event.label.name == 'ai-approved')) ||
+        (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+          contains(github.event.issue.labels.*.name, 'ai:needs-input')) ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+          contains(github.event.comment.body, '@agent'))
+      )
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # the token is not left in .git/config, so the agent can't read it
+          persist-credentials: false
+      # exec, so the runner's cancel signal goes to the script and not to a shell around it.
+      # The script then stops the agent or the build it is waiting for (scripts/steps.sh).
+      - run: exec scripts/agent-run.sh
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.issue.pull_request && github.event.issue.number || '' }}
+          TRIGGER: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ATTACHMENTS_TOKEN: ${{ secrets.ATTACHMENTS_TOKEN }}
+          PIPELINE_OWNER: ${{ vars.PIPELINE_OWNER }}
+      # The job hit its time limit or was cancelled on GitHub: say so on the ticket, which
+      # would otherwise stay on "running". A ticket that was closed is left to scripts/cancel.sh.
+      # The checkout may hold files the agent changed and this step has the token, so the
+      # status script is fetched from the default branch instead of being run from the checkout.
+      - name: Mark the ticket as stopped
+        if: cancelled()
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.issue.pull_request && github.event.issue.number || '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export GH_REPO="$GITHUB_REPOSITORY"
+          n="$ISSUE_NUMBER"
+          if [ -n "$PR_NUMBER" ]; then
+            head=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+            case "$head" in
+              ai/issue-*) n="${head#ai/issue-}" ;;
+              *) exit 0 ;;
+            esac
+          fi
+          ticket=$(gh api "repos/$GITHUB_REPOSITORY/issues/$n" \
+            --jq '[.state, ([.labels[].name] | join(","))] | @tsv')
+          case "$ticket," in
+            open*ai:running,*) ;;
+            *) echo "Ticket #$n is not open and running; leaving its status alone."; exit 0 ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/contents/scripts/status.sh?ref=$DEFAULT_BRANCH" \
+            -H "Accept: application/vnd.github.raw" > "$RUNNER_TEMP/status.sh"
+          bash "$RUNNER_TEMP/status.sh" "$n" failed \
+            "Run stopped before it finished: it reached the time limit or was cancelled"

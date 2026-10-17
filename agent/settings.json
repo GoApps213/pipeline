@@ -1,0 +1,68 @@
+{
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "900000",
+    "BASH_MAX_TIMEOUT_MS": "900000"
+  },
+  "permissions": {
+    "deny": [
+      "Edit(scripts/**)",
+      "Edit(fastlane/**)",
+      "Edit(.github/**)",
+      "Edit(.claude/**)",
+      "Edit(.agent/settings.json)",
+      "Edit(.agent/prompt-*.md)",
+      "Edit(.agent/models.json)",
+      "Edit(GoTask/GoTask.xcodeproj/project.pbxproj)",
+      "Edit(firebase.json)",
+      "Edit(.firebaserc)",
+      "Edit(CLAUDE.md)",
+      "Edit(.mcp.json)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.config/configstore/**)",
+      "Read(~/.claude/**)",
+      "Read(~/.netrc)",
+      "Read(~/.zsh_history)",
+      "Read(~/dev/**)",
+      "Read(~/Documents/**)",
+      "Read(~/Desktop/**)",
+      "Read(~/Downloads/**)",
+      "Read(~/Library/Keychains/**)",
+      "Read(~/Library/Application Support/**)",
+      "Read(~/actions-runner/.credentials*)",
+      "Read(~/actions-runner/.runner*)",
+      "Read(~/actions-runner/.env)",
+      "Read(~/actions-runner/.path)",
+      "Read(~/actions-runner/_diag/**)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": ["scripts/verify.sh", "scripts/verify.sh:*"],
+    "filesystem": {
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.config/gh",
+        "~/.config/configstore",
+        "~/.claude",
+        "~/.netrc",
+        "~/.zsh_history",
+        "~/dev",
+        "~/Documents",
+        "~/Desktop",
+        "~/Downloads",
+        "~/Library/Keychains",
+        "~/Library/Application Support",
+        "~/actions-runner/.credentials",
+        "~/actions-runner/.credentials_rsaparams",
+        "~/actions-runner/.runner",
+        "~/actions-runner/.env",
+        "~/actions-runner/.path",
+        "~/actions-runner/_diag"
+      ]
+    }
+  }
+}

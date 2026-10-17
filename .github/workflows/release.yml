@@ -1,0 +1,75 @@
+name: Release
+on:
+  push:
+    branches: [main]
+    # changes that can't affect the app don't make a build
+    paths-ignore:
+      - "docs/**"
+      - "scripts/**"
+      - ".agent/**"
+      - ".claude/**"
+      - ".github/workflows/agent.yml"
+      - "**.md"
+  schedule:
+    - cron: "0 9 1 * *"   # monthly, so builds never hit the 90-day expiry
+  workflow_dispatch:
+
+# One build at a time, and a newer push replaces a build that is waiting or running.
+# The build that survives covers everything merged since the last successful one.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  testflight:
+    runs-on: [self-hosted, macOS]
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      pull-requests: read
+    steps:
+      # Agent runs use this same folder on the runner, and git hooks and .git/config
+      # survive a checkout. Start from a fresh clone so nothing left by an agent run
+      # executes in the job that holds the secrets.
+      - name: Remove the git state left in the workspace
+        run: rm -rf "$GITHUB_WORKSPACE/.git"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # build-contents.sh reads the history since the last build
+
+      - name: Work out what this build contains
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TICKETS=$(scripts/build-contents.sh)
+          for n in $TICKETS; do scripts/status.sh "$n" building "Build started"; done
+
+      - name: Build and upload
+        env:
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # lets the lane add progress lines to the tickets in this build
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: fastlane beta
+
+      - name: Mark the tickets released
+        if: success() && env.TICKETS != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export BUILD_NUMBER=$(cat .build-number)
+          for n in $TICKETS; do scripts/status.sh "$n" released "On TestFlight (build $BUILD_NUMBER)"; done
+
+      - name: Mark the tickets failed
+        if: failure() && env.TICKETS != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: for n in $TICKETS; do scripts/status.sh "$n" failed "Release build failed; see the Actions log"; done
