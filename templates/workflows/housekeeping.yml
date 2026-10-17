@@ -1,0 +1,20 @@
+name: Housekeeping
+# Keeps ticket states honest: reminders, merged and closed pull requests, cancelled tickets.
+# The jobs are the pipeline's reusable workflow (GoApps213/pipeline); this file says when.
+on:
+  schedule:
+    - cron: "0 16 * * *"   # daily
+  pull_request:
+    types: [closed]
+  issues:
+    types: [closed]
+  workflow_dispatch:
+
+jobs:
+  housekeeping:
+    permissions:
+      issues: write
+      pull-requests: write
+      actions: write   # to cancel a cancelled ticket's agent run
+    uses: GoApps213/pipeline/.github/workflows/housekeeping.yml@v1
+    secrets: inherit

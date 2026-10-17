@@ -1,0 +1,34 @@
+name: Release
+# Builds the app and uploads it to TestFlight. The build is the pipeline's reusable workflow
+# (GoApps213/pipeline), driven by .agent/project.json; this file says when it runs.
+on:
+  push:
+    branches: [main]
+    # changes that can't affect the app don't make a build
+    paths-ignore:
+      - "docs/**"
+      - "scripts/**"
+      - ".agent/**"
+      - ".claude/**"
+      - ".github/workflows/agent.yml"
+      - ".github/workflows/housekeeping.yml"
+      - "**.md"
+  schedule:
+    - cron: "0 9 1 * *"   # monthly, so builds never hit the 90-day expiry
+  workflow_dispatch:
+
+# One build at a time, and a newer push replaces a build that is waiting or running.
+# The build that survives covers everything merged since the last successful one.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  testflight:
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      pull-requests: read
+    uses: GoApps213/pipeline/.github/workflows/release.yml@v1
+    secrets: inherit

@@ -1,0 +1,8 @@
+{
+  "xcodeproj": "MyApp/MyApp.xcodeproj",
+  "scheme": "MyApp",
+  "bundle_id": "com.cmak.myapp",
+  "team_id": "H78L7CA28Q",
+  "attachments_repo": "attachments",
+  "protected": ["MyApp/MyApp.xcodeproj/project.pbxproj"]
+}

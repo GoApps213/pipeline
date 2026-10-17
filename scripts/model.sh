@@ -5,12 +5,15 @@
 #        model.sh <id>        # set it without the menu
 #        model.sh --show      # print the current model's name
 #        model.sh --resolve   # print the current entry as JSON; agent-run.sh reads this
-# Optional env: MODELS_FILE (default .agent/models.json in this repo),
-#               PIPELINE_MODEL_FILE (default ~/.config/gotask-pipeline/model).
+# Optional env: MODELS_FILE (default agent/models.json in this repo),
+#               PIPELINE_MODEL_FILE (default ~/.config/agent-pipeline/model).
+# A choice made before the pipeline had its own repo, in ~/.config/gotask-pipeline/model,
+# is used until a new one is made.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-MODELS_FILE=${MODELS_FILE:-$HERE/../.agent/models.json}
-CHOICE_FILE=${PIPELINE_MODEL_FILE:-$HOME/.config/gotask-pipeline/model}
+MODELS_FILE=${MODELS_FILE:-$HERE/../agent/models.json}
+CHOICE_FILE=${PIPELINE_MODEL_FILE:-$HOME/.config/agent-pipeline/model}
+OLD_CHOICE_FILE=$HOME/.config/gotask-pipeline/model
 
 # The adapter name becomes a script path in agent-run.sh, so its characters are checked here
 if ! jq -e '(.models | type == "array" and length > 0)
@@ -28,7 +31,10 @@ entry() { jq -ce --arg id "$1" 'first(.models[] | select(.id == $id))' "$MODELS_
 # The saved id, or the list's default when nothing has been chosen
 current_id() {
   local id=""
-  [ -f "$CHOICE_FILE" ] && id=$(head -1 "$CHOICE_FILE" | tr -d '[:space:]')
+  if [ -f "$CHOICE_FILE" ]; then id=$(head -1 "$CHOICE_FILE" | tr -d '[:space:]')
+  elif [ -z "${PIPELINE_MODEL_FILE:-}" ] && [ -f "$OLD_CHOICE_FILE" ]; then
+    id=$(head -1 "$OLD_CHOICE_FILE" | tr -d '[:space:]')
+  fi
   if [ -n "$id" ]; then echo "$id"; else jq -r .default "$MODELS_FILE"; fi
 }
 
@@ -48,7 +54,7 @@ save() {
 case "${1:-}" in
   --resolve) current_entry ;;
   --show)    current_entry | jq -r .name ;;
-  -*)        sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2 ;;
+  -*)        sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 2 ;;
   "")
     CURRENT=$(current_id)
     COUNT=$(jq '.models | length' "$MODELS_FILE")

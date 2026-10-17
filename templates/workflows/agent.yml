@@ -1,0 +1,42 @@
+name: Agent
+# Starts the pipeline's agent on a ticket. The work is done by the pipeline's reusable
+# workflow (GoApps213/pipeline); this file decides when, and grants the permissions.
+# The number comes first so the pipeline's cancel.sh can find a ticket's runs.
+run-name: "#${{ github.event.issue.number }} ${{ github.event.issue.title }}"
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    # Only you can start the agent, by:
+    #   - adding the ai-request or ai-approved label to an issue
+    #   - replying on a ticket that is waiting for your answer
+    #   - mentioning @agent in a comment on a pull request
+    # Comments the workflow posts come from the Actions bot, so they never retrigger it.
+    # Nothing starts for a closed ticket or pull request; closing a ticket is how it is cancelled.
+    # "You" is the PIPELINE_OWNER variable, since the repo's owner is an organization.
+    # With the variable unset, nothing starts.
+    if: >-
+      github.event.sender.login == vars.PIPELINE_OWNER && github.event.issue.state == 'open' && (
+        (github.event_name == 'issues' &&
+          (github.event.label.name == 'ai-request' || github.event.label.name == 'ai-approved')) ||
+        (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+          contains(github.event.issue.labels.*.name, 'ai:needs-input')) ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+          contains(github.event.comment.body, '@agent'))
+      )
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: GoApps213/pipeline/.github/workflows/agent.yml@v1
+    with:
+      pipeline-owner: ${{ vars.PIPELINE_OWNER }}
+    secrets: inherit

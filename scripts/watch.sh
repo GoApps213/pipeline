@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Watches the pipeline from a terminal: announces workflow runs as they come in,
-# shows each step as it starts and finishes, and streams the live step logs
-# from the self-hosted runner on this Mac.
+# Watches the pipeline from a terminal: announces workflow runs as they come in, in every
+# repo of the organization that has workflows, shows each step as it starts and finishes,
+# and streams the live step logs from the self-hosted runner on this Mac. The repos are
+# found when it starts, so restart it after adding a project.
 #
 # Usage: scripts/watch.sh            # leave it running; Ctrl-C to stop
 #        QUIET=1 scripts/watch.sh    # runs and steps only, no log lines
-# Optional env: REPO (owner/name), RUNNER_DIR (default ~/actions-runner)
+# Optional env: REPO (owner/name: watch only that one), PIPELINE_ORG (default GoApps213),
+#               RUNNER_DIR (default ~/actions-runner)
 set -uo pipefail
 
 RUNNER_DIR=${RUNNER_DIR:-$HOME/actions-runner}
 PAGES="$RUNNER_DIR/_diag/pages"   # the runner writes each step's live log here
-REPO=${REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}
+ORG=${PIPELINE_ORG:-GoApps213}
+REPOS=()
+if [ -n "${REPO:-}" ]; then
+  REPOS=("$REPO")
+else
+  while IFS= read -r r; do
+    [ "$(gh api "repos/$r/actions/workflows" --jq .total_count 2>/dev/null || echo 0)" -gt 0 ] && REPOS+=("$r")
+  done < <(gh repo list "$ORG" --no-archived --limit 100 --json nameWithOwner --jq '.[].nameWithOwner' | sort)
+fi
 STATE=$(mktemp -d)
 touch "$STATE/events" "$STATE/announced" "$STATE/done"
 
@@ -58,9 +68,9 @@ runner_hint() {
   fi
 }
 
-# Print step changes for one run that haven't been printed yet
+# Print step changes for run $1 in repo $2 that haven't been printed yet
 show_steps() {
-  gh run view "$1" -R "$REPO" --json jobs --jq '
+  gh run view "$1" -R "$2" --json jobs --jq '
     .jobs[] | .name as $j | .steps[] | select(.status != "pending" and .status != "queued")
     | [$j, .name, .status, (.conclusion // "")] | @tsv' 2>/dev/null \
   | while IFS=$'\t' read -r job step status conclusion; do
@@ -76,46 +86,55 @@ show_steps() {
     done
 }
 
+# One line per recent run of every watched repo: the repo first, then the run's fields.
+# A run with no conclusion yet gets "-": read merges two tabs in a row, which would shift the
+# fields after an empty one.
 list_runs() {
-  gh run list -R "$REPO" --limit 15 \
-    --json databaseId,status,conclusion,displayTitle,workflowName,event,url \
-    --jq '.[] | [.databaseId, .status, (.conclusion // ""), .workflowName, .event, .url, .displayTitle] | @tsv' 2>/dev/null
+  local r
+  for r in "${REPOS[@]}"; do
+    gh run list -R "$r" --limit 15 \
+      --json databaseId,status,conclusion,displayTitle,workflowName,event,url \
+      --jq '.[] | [.databaseId, .status, (if (.conclusion // "") == "" then "-" else .conclusion end),
+                   .workflowName, .event, .url, .displayTitle] | @tsv' \
+      2>/dev/null | awk -v r="$r" '{ print r "\t" $0 }'
+  done
 }
 
-say "${bold}Watching $REPO${off}  (Ctrl-C to stop)"
+[ "${#REPOS[@]}" -gt 0 ] || { say "No repo in $ORG has workflows to watch."; exit 1; }
+say "${bold}Watching ${REPOS[*]#*/}${off}  (Ctrl-C to stop)"
 runner_hint
 
 # Runs that finished before the watcher started are not reported
-list_runs | awk -F'\t' '$2 == "completed" {print $1}' > "$STATE/done"
+list_runs | awk -F'\t' '$3 == "completed" {print $2}' > "$STATE/done"
 
 [ -n "${QUIET:-}" ] || stream_logs &
 
 idle_note=0
 while true; do
   active=0
-  while IFS=$'\t' read -r id status conclusion workflow event url title; do
+  while IFS=$'\t' read -r repo id status conclusion workflow event url title; do
     [ -n "$id" ] || continue
     grep -Fxq "$id" "$STATE/done" && continue
 
     if ! grep -Fxq "$id" "$STATE/announced"; then
       echo "$id" >> "$STATE/announced"
       echo
-      say "${bold}━━ $workflow run started ($event): $title${off}"
+      say "${bold}━━ ${repo#*/}: $workflow run started ($event): $title${off}"
       say "${dim}$url${off}"
       [ "$status" = queued ] && runner_hint
     fi
 
-    show_steps "$id"
+    show_steps "$id" "$repo"
 
     if [ "$status" = completed ]; then
       echo "$id" >> "$STATE/done"
       sleep 2   # let the last log lines print before the result
       if [ "$conclusion" = success ]; then
-        say "${green}${bold}━━ $workflow finished: success${off}"
+        say "${green}${bold}━━ ${repo#*/}: $workflow finished: success${off}"
       else
-        say "${red}${bold}━━ $workflow finished: $conclusion${off}"
+        say "${red}${bold}━━ ${repo#*/}: $workflow finished: $conclusion${off}"
         say "Log of the failed step:"
-        gh run view "$id" -R "$REPO" --log-failed 2>/dev/null | cut -f3- | tail -40
+        gh run view "$id" -R "$repo" --log-failed 2>/dev/null | cut -f3- | tail -40
       fi
       echo
     else

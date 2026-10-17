@@ -1,14 +1,17 @@
 name: Housekeeping
-# Small jobs that keep ticket states honest. They run on GitHub's own runners,
-# so they work while the Mac's pipeline is off.
+# Small jobs that keep ticket states honest. They run on GitHub's own runners, so they work
+# while the Mac's pipeline is off. Called by each project's .github/workflows/housekeeping.yml
+# on its schedule, closed pull requests and closed issues; each job checks which it was.
 on:
-  schedule:
-    - cron: "0 16 * * *"   # daily
-  pull_request:
-    types: [closed]
-  issues:
-    types: [closed]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      pipeline-ref:
+        description: The pipeline version the scripts are taken from; keep it in step with @ in uses
+        type: string
+        default: v1
+
+env:
+  PIPELINE_URL: https://codeload.github.com/GoApps213/pipeline/tar.gz/${{ inputs.pipeline-ref }}
 
 jobs:
   reminders:
@@ -16,11 +19,11 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - run: scripts/reminders.sh
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
+      - run: '"$RUNNER_TEMP/p/scripts/reminders.sh"'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -31,12 +34,10 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'ai/issue-')
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main   # run the scripts from main, not from the merged branch
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -47,7 +48,7 @@ jobs:
                | grep -qxE 'ai:(building|released|failed)'; then
             echo "Ticket #$N is already past this point."; exit 0
           fi
-          scripts/status.sh "$N" building "Merged; waiting for the build to start"
+          "$RUNNER_TEMP/p/scripts/status.sh" "$N" building "Merged; waiting for the build to start"
 
   closed-without-merging:
     # an agent PR closed without merging would otherwise leave its ticket "in review"
@@ -56,13 +57,11 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'ai/issue-')
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main   # run the scripts from main, not from the closed branch
-      - run: scripts/status.sh "${HEAD_REF#ai/issue-}" failed "Pull request closed without merging"
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
+      - run: '"$RUNNER_TEMP/p/scripts/status.sh" "${HEAD_REF#ai/issue-}" failed "Pull request closed without merging"'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -77,13 +76,13 @@ jobs:
        contains(github.event.issue.labels.*.name, 'ai-approved'))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       issues: write
       pull-requests: write
       actions: write   # to cancel the agent's run
     steps:
-      - uses: actions/checkout@v4
-      - run: scripts/cancel.sh "$N"
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
+      - run: '"$RUNNER_TEMP/p/scripts/cancel.sh" "$N"'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           N: ${{ github.event.issue.number }}

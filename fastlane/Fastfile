@@ -1,17 +1,28 @@
+require "json"
+
 default_platform(:ios)
 
 KEYCHAIN = "pipeline-signing"
 
+# The project being released: its checkout and its .agent/project.json, which names the Xcode
+# project, scheme, bundle ID and team. Set by the release workflow.
+PROJECT_DIR = ENV.fetch("PROJECT_DIR")
+PROJECT = JSON.parse(File.read(File.join(PROJECT_DIR, ".agent/project.json")))
+CERTS_REPO = PROJECT.fetch("certificates_repo", "https://github.com/GoApps213/ios-certs.git")
+
 # Adds a line to the timeline of every ticket in this build (TICKETS is set by the
 # release workflow; a local run has none). Never fails the build.
 def progress(message)
-  ENV["TICKETS"].to_s.split.each { |n| sh("../scripts/status.sh", n, "building", message) }
+  status = File.expand_path("../scripts/status.sh", __dir__)
+  ENV["TICKETS"].to_s.split.each { |n| sh(status, n, "building", message) }
 rescue => e
   UI.important("Could not post progress: #{e.message}")
 end
 
 platform :ios do
   lane :beta do
+    bundle_id = PROJECT.fetch("bundle_id")
+
     # A leftover keychain from a crashed run would make create_keychain fail
     delete_keychain(name: KEYCHAIN) rescue nil
 
@@ -32,16 +43,19 @@ platform :ios do
     )
 
     match(type: "appstore", readonly: true, api_key: api_key,
+          git_url: CERTS_REPO, storage_mode: "git",
+          app_identifier: [bundle_id], team_id: PROJECT.fetch("team_id"),
           keychain_name: KEYCHAIN, keychain_password: ENV["MATCH_PASSWORD"])
 
     # Passed to xcodebuild rather than written into the project, so the checkout stays clean
-    build_number = latest_testflight_build_number(api_key: api_key, initial_build_number: 0) + 1
-    File.write("../.build-number", build_number.to_s)
+    build_number = latest_testflight_build_number(api_key: api_key, app_identifier: bundle_id,
+                                                  initial_build_number: 0) + 1
+    File.write(File.join(PROJECT_DIR, ".build-number"), build_number.to_s)
 
     progress("Archiving build #{build_number}")
     build_app(
-      project: "GoTask/GoTask.xcodeproj",
-      scheme: "GoTask",
+      project: File.join(PROJECT_DIR, PROJECT.fetch("xcodeproj")),
+      scheme: PROJECT.fetch("scheme"),
       export_method: "app-store",
       xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
     )
@@ -49,6 +63,7 @@ platform :ios do
     progress("Uploading to TestFlight; Apple then processes the build")
     upload_to_testflight(
       api_key: api_key,
+      app_identifier: bundle_id,
       changelog: ENV["WHAT_TO_TEST"].to_s[0, 3900]   # TestFlight's limit is 4000 characters
     )
   ensure

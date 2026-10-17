@@ -2,8 +2,9 @@
 # Runs one agent pass for a ticket: gather the issue, run the agent, verify, open the PR,
 # then have a second agent session review it.
 # Called by .github/workflows/agent.yml for a new request, a reply to the agent's
-# questions, or an "@agent" comment on the ticket's pull request.
-# Env: ISSUE_NUMBER, GH_TOKEN, GITHUB_REPOSITORY;
+# questions, or an "@agent" comment on the ticket's pull request. It runs in the project's
+# checkout, on main; the project supplies .agent/project.json and scripts/verify.sh.
+# Env: ISSUE_NUMBER, GH_TOKEN, GITHUB_REPOSITORY, PIPELINE_DIR (this pipeline, downloaded);
 #      optional PR_NUMBER (set for a PR comment), TRIGGER (the event name),
 #      ATTACHMENTS_TOKEN, PIPELINE_OWNER (the person asked to review the PR).
 # The agent and its model are the ones chosen with scripts/model.sh on this Mac.
@@ -23,12 +24,10 @@ main() {
   RUN=.agent/run
   MAX_RETRIES=2
   MAX_REVIEW_ROUNDS=2
-  # Paths the agent must never change: the pipeline itself, files that run code at
-  # build time, and the instructions later runs read
-  PROTECTED=(scripts fastlane .github .claude .agent/settings.json .agent/prompt-implement.md .agent/prompt-review.md
-             .agent/models.json
-             GoTask/GoTask.xcodeproj/project.pbxproj
-             firebase.json .firebaserc CLAUDE.md .mcp.json)
+  # Paths the agent must never change: the pipeline's parts in the project, files that run
+  # code at build time, and the instructions later runs read. The project adds its own, such
+  # as its Xcode project file, in .agent/project.json (read below).
+  PROTECTED=(scripts fastlane .github .claude .agent/project.json CLAUDE.md .mcp.json)
 
   # A comment on the PR: map it back to the ticket
   if [ -n "$PR_NUMBER" ]; then
@@ -54,11 +53,12 @@ main() {
   fi
   record_steps
 
-  # Run the pipeline's own scripts from a copy taken before anything else happens,
-  # so a branch switch or an agent edit can't change the code that is running.
+  # Run from copies taken before anything else happens, so a branch switch or an agent edit
+  # can't change the code that is running: the pipeline's scripts and agent files from the
+  # download the workflow made, and the project's scripts and config (below) from main.
   TOOLS=$(mktemp -d)
-  cp -R scripts "$TOOLS/scripts"
-  mkdir "$TOOLS/agent" && cp .agent/settings.json .agent/models.json .agent/prompt-*.md "$TOOLS/agent/"
+  cp -R "$PIPELINE_DIR/scripts" "$TOOLS/scripts"
+  cp -R "$PIPELINE_DIR/agent" "$TOOLS/agent"
   export PROMPT_DIR="$TOOLS/agent"
 
   status() { "$TOOLS/scripts/status.sh" "$N" "$@"; }
@@ -153,6 +153,22 @@ main() {
   }
   trap on_cancel INT TERM
 
+  # The project's part: scripts/verify.sh (and anything it calls), and .agent/project.json,
+  # which names the files it protects as well and where its ticket images are kept. The
+  # agent's settings get a deny rule for each of those files.
+  [ -x scripts/verify.sh ] || fail "This repo has no scripts/verify.sh; see the pipeline repo's README"
+  cp -R scripts "$TOOLS/project"
+  PROJECT="$TOOLS/project.json"
+  cp .agent/project.json "$PROJECT" 2>/dev/null ||
+    fail "This repo has no .agent/project.json; see the pipeline repo's README"
+  jq -e '(.protected // []) | type == "array" and all(.[]; type == "string" and length > 0)' \
+    "$PROJECT" >/dev/null || fail ".agent/project.json is not valid: \"protected\" must be a list of paths"
+  while IFS= read -r file; do PROTECTED+=("$file"); done < <(jq -r '.protected // [] | .[]' "$PROJECT")
+  jq --slurpfile p "$PROJECT" '.permissions.deny += [($p[0].protected // [])[] | "Edit(\(.))"]' \
+    "$PIPELINE_DIR/agent/settings.json" > "$TOOLS/agent/settings.json"
+  attachments=$(jq -r '.attachments_repo // ""' "$PROJECT")
+  if [ -n "$attachments" ]; then export ATTACHMENTS_REPO="${GITHUB_REPOSITORY%%/*}/$attachments"; fi
+
   # A run can wait in the queue for a while. Skip it quietly if the ticket was
   # deleted, closed, or had its request label removed in the meantime.
   if ! ticket=$(gh api "repos/$GITHUB_REPOSITORY/issues/$N" \
@@ -172,7 +188,7 @@ main() {
 
   # Which agent and model: the one chosen with scripts/model.sh, looked up in main's list
   if ! chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve); then
-    fail "The chosen model is not in .agent/models.json; run scripts/model.sh on the Mac"
+    fail "The chosen model is not in the pipeline's agent/models.json; run scripts/model.sh on the Mac"
   fi
   AGENT_NAME=$(jq -r .name <<<"$chosen")
   export AGENT_ADAPTER="$(jq -r .adapter <<<"$chosen")"
@@ -265,7 +281,7 @@ main() {
       # Verification builds and runs the agent's code, so it gets no tokens either
       echo "Verifying (build and tests)…"
       if resolved && run_step env -u GH_TOKEN -u GITHUB_TOKEN -u ATTACHMENTS_TOKEN \
-           "$TOOLS/scripts/verify.sh" > "$RUN/feedback.log" 2>&1; then
+           "$TOOLS/project/verify.sh" > "$RUN/feedback.log" 2>&1; then
         check_protected
         rm "$RUN/feedback.log"; break
       fi
