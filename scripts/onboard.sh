@@ -32,6 +32,7 @@ done <<'EOF'
 ai-request|BFD4F2|A request for the pipeline's agent
 ai-approved|C2E0C6|Starts the agent on a request filed by someone else
 ai-skip-review|FEF2C0|The agent's pull request skips the AI review
+ai-skip-ui-tests|FEF2C0|The agent adds no UI tests and verifies with the unit tests only
 ai-archived|ededed|Archived in GoBuild; the pipeline ignores it
 ai-mockup|0E8A16|Not used yet
 ai:queued|5319E7|Pipeline: waiting for the runner

@@ -17,6 +17,9 @@ You are implementing a feature request for this iOS app. Follow CLAUDE.md.
   .agent/run/questions.md and stop without changing any code.
 - Otherwise implement the ticket and add or update tests. CLAUDE.md, and any testing guide it
   points to, says which kind of test a change needs.
+- If the labels in issue.json include `ai-skip-ui-tests`, add and change no UI tests, even where
+  CLAUDE.md asks for them, and don't run any; unit tests are still needed. The pipeline verifies the
+  change with the unit tests only. Say in the summary that UI tests were skipped.
 - Run only the tests your change touches, from the repo root, by naming them:
   `scripts/verify.sh <test target>/<suite or class>`. CLAUDE.md lists this app's test targets and
   gives examples. Several names can be given at once.
