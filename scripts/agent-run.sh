@@ -202,6 +202,11 @@ main() {
   case ",$ticket_labels," in *,ai:needs-input,*) MODE=answer ;; esac
   [ -n "$PR_NUMBER" ] && MODE=feedback
 
+  # A request that skips UI tests is verified with the unit tests only (VERIFY_UNIT_ONLY,
+  # which verify.sh reads when it is run with no test names)
+  VERIFY_ENV=()
+  case ",$ticket_labels," in *,ai-skip-ui-tests,*) VERIFY_ENV=(VERIFY_UNIT_ONLY=1) ;; esac
+
   # A second reply sent before the first was picked up has nothing left to answer
   if [ "${TRIGGER:-}" = issue_comment ] && [ "$MODE" = new ]; then
     echo "Ticket #$N is not waiting for an answer; nothing to do."
@@ -279,8 +284,12 @@ main() {
       esac
 
       # Verification builds and runs the agent's code, so it gets no tokens either
-      echo "Verifying (build and tests)…"
-      if resolved && run_step env -u GH_TOKEN -u GITHUB_TOKEN -u ATTACHMENTS_TOKEN \
+      if [ ${#VERIFY_ENV[@]} -gt 0 ]; then
+        echo "Verifying (build and unit tests; the request skips UI tests)…"
+      else
+        echo "Verifying (build and tests)…"
+      fi
+      if resolved && run_step env -u GH_TOKEN -u GITHUB_TOKEN -u ATTACHMENTS_TOKEN ${VERIFY_ENV[@]+"${VERIFY_ENV[@]}"} \
            "$TOOLS/project/verify.sh" > "$RUN/feedback.log" 2>&1; then
         check_protected
         rm "$RUN/feedback.log"; break
