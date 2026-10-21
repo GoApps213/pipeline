@@ -11,7 +11,8 @@ You are implementing a feature request for this iOS app. Follow CLAUDE.md.
   work on again. If it lists files with conflict markers, resolve those first by editing them: keep
   what both sides meant, remove every marker, and do not change other code to avoid the conflict. You
   cannot run `git merge` or `git add`, and need not; the pipeline commits the merge. Say in the
-  summary how you resolved each one.
+  summary how you resolved each one. If merge.md says the run is only to resolve the conflicts, do
+  only that, and keep the summary to how you resolved them.
 - Before writing code, decide whether the ticket is clear enough. Only if a choice matters and
   can't be inferred from the ticket or the code, write numbered questions to
   .agent/run/questions.md and stop without changing any code.
