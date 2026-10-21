@@ -8,8 +8,8 @@ This repo holds the shared parts. Each app repo calls them, and supplies what on
 
 | File | What it does |
 | --- | --- |
-| `.github/workflows/agent.yml` | Decides which labels and comments start the agent, then calls `agent.yml` here |
-| `.github/workflows/housekeeping.yml` | Calls `housekeeping.yml` here daily and when issues or pull requests close |
+| `.github/workflows/agent.yml` | Decides which labels and comments start the agent, then calls `agent.yml` here. Its `workflow_dispatch` trigger, with the pull request's number, is how housekeeping starts a run to resolve conflicts |
+| `.github/workflows/housekeeping.yml` | Calls `housekeeping.yml` here daily and when issues or pull requests close. After a merge, it checks the other open pull requests for conflicts with `main` (`scripts/conflicts.sh`): an agent pull request gets an agent run that merges `main` and resolves them; any other gets a comment |
 | `.github/workflows/release.yml` | Calls `release.yml` here on pushes to `main`, monthly and on demand |
 | `.agent/project.json` | What to build and what to protect; see below |
 | `scripts/verify.sh` | Builds and runs the tests. Given test names, runs only those and refuses anything else. `templates/verify.sh` does this from `project.json`; an app that needs more, such as GoTask's Firebase emulators, writes its own |

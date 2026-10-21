@@ -2,10 +2,13 @@
 # Runs one agent pass for a ticket: gather the issue, run the agent, verify, open the PR,
 # then have a second agent session review it.
 # Called by .github/workflows/agent.yml for a new request, a reply to the agent's
-# questions, or an "@agent" comment on the ticket's pull request. It runs in the project's
-# checkout, on main; the project supplies .agent/project.json and scripts/verify.sh.
+# questions, an "@agent" comment on the ticket's pull request, or housekeeping finding the
+# pull request in conflict with main after another was merged (scripts/conflicts.sh).
+# It runs in the project's checkout, on main; the project supplies .agent/project.json
+# and scripts/verify.sh.
 # Env: ISSUE_NUMBER, GH_TOKEN, GITHUB_REPOSITORY, PIPELINE_DIR (this pipeline, downloaded);
-#      optional PR_NUMBER (set for a PR comment), TRIGGER (the event name),
+#      optional PR_NUMBER (set for a PR comment or a conflicts run), TRIGGER (the event name;
+#      workflow_dispatch for a conflicts run),
 #      ATTACHMENTS_TOKEN, PIPELINE_OWNER (the person asked to review the PR).
 # The agent and its model are the ones chosen with scripts/model.sh on this Mac.
 #
@@ -118,6 +121,10 @@ main() {
       echo "These files conflicted and hold conflict markers (<<<<<<< HEAD is this branch, >>>>>>> origin/main is main):"
       echo
       sed 's/^/- /' <<<"$CONFLICTS"
+      if [ "$MODE" = conflicts ]; then
+        echo
+        echo "This run is only to resolve these conflicts; make no other changes."
+      fi
     } > "$RUN/merge.md"
   }
   # Fails, with the reason in feedback.log, while a file that conflicted still has markers.
@@ -201,6 +208,7 @@ main() {
   MODE=new
   case ",$ticket_labels," in *,ai:needs-input,*) MODE=answer ;; esac
   [ -n "$PR_NUMBER" ] && MODE=feedback
+  [ "${TRIGGER:-}" = workflow_dispatch ] && MODE=conflicts
 
   # A request that skips UI tests is verified with the unit tests only (VERIFY_UNIT_ONLY,
   # which verify.sh reads when it is run with no test names)
@@ -213,7 +221,22 @@ main() {
     exit 0
   fi
 
-  # An answer or PR feedback continues the session the agent was in
+  # A conflicts run waits in the queue behind other runs, which merge main too, and another
+  # merge into main may have resolved the conflict. Check before saying anything on the ticket.
+  if [ "$MODE" = conflicts ]; then
+    case ",$ticket_labels," in
+      *,ai:needs-input,*)
+        echo "Ticket #$N is waiting for an answer; the run after it merges main."; exit 0 ;;
+    esac
+    rc=0; git merge-tree --write-tree --quiet origin/main "origin/$BRANCH" || rc=$?
+    case "$rc" in
+      0) echo "$BRANCH no longer conflicts with main; nothing to do."; exit 0 ;;
+      1) ;;
+      *) fail "Could not check $BRANCH for conflicts with main" ;;
+    esac
+  fi
+
+  # An answer, PR feedback or a conflicts run continues the session the agent was in
   if [ "$MODE" != new ]; then
     saved=$(gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" --paginate \
       --jq '.[] | select(.body | startswith("<!-- ai-status -->")) | .body' \
@@ -231,6 +254,7 @@ main() {
     new)      status running "Agent run started ($AGENT_NAME)" ;;
     answer)   status running "Continuing with your answer ($AGENT_NAME)" ;;
     feedback) status running "Working on your pull request comment ($AGENT_NAME)" ;;
+    conflicts) status running "Resolving conflicts with main ($AGENT_NAME)" ;;
   esac
 
   # 1. Gather the ticket, its images, and any PR feedback
@@ -325,8 +349,12 @@ main() {
       fail "Agent finished without changing any files"
     fi
   else
-    if [ "$MODE" = feedback ]; then msg="Address feedback on #$N: $TITLE"; else msg="Implement #$N: $TITLE"; fi
-    if merging; then msg="$msg (merges main)"; fi
+    case "$MODE" in
+      feedback)  msg="Address feedback on #$N: $TITLE" ;;
+      conflicts) msg="Merge main into $BRANCH" ;;
+      *)         msg="Implement #$N: $TITLE" ;;
+    esac
+    if merging && [ "$MODE" != conflicts ]; then msg="$msg (merges main)"; fi
     git commit -q -m "$msg"
   fi
   push
@@ -336,11 +364,12 @@ main() {
     echo; echo "Closes #$N"
   } > "$RUN/pr-body.md"
   if gh pr view "$BRANCH" --json url >/dev/null 2>&1; then
-    if [ "$MODE" = feedback ] && [ -s "$RUN/summary.md" ]; then
+    if { [ "$MODE" = feedback ] || [ "$MODE" = conflicts ]; } && [ -s "$RUN/summary.md" ]; then
       gh pr comment "$BRANCH" --body-file "$RUN/summary.md" >/dev/null
     fi
     request_review
-    PR_URL="$(gh pr view "$BRANCH" --json url --jq .url)" status in-review "PR updated"
+    note="PR updated"; [ "$MODE" = conflicts ] && note="Resolved conflicts with main"
+    PR_URL="$(gh pr view "$BRANCH" --json url --jq .url)" status in-review "$note"
     exit 0
   fi
   gh pr create --head "$BRANCH" --base main --title "$TITLE" --body-file "$RUN/pr-body.md"

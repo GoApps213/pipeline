@@ -8,6 +8,10 @@ on:
         description: The person whose labels and comments start runs; asked to review each PR
         type: string
         required: true
+      pr-number:
+        description: For a run started by housekeeping's conflicts job, the pull request whose conflicts with main to resolve
+        type: string
+        default: ""
       pipeline-ref:
         description: The pipeline version the scripts are taken from; keep it in step with @ in uses
         type: string
@@ -37,8 +41,8 @@ jobs:
       - run: exec "$RUNNER_TEMP/pipeline/scripts/agent-run.sh"
         env:
           PIPELINE_DIR: ${{ runner.temp }}/pipeline
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PR_NUMBER: ${{ github.event.issue.pull_request && github.event.issue.number || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          PR_NUMBER: ${{ inputs.pr-number || (github.event.issue.pull_request && github.event.issue.number) || '' }}
           TRIGGER: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ATTACHMENTS_TOKEN: ${{ secrets.ATTACHMENTS_TOKEN }}
@@ -50,8 +54,8 @@ jobs:
       - name: Mark the ticket as stopped
         if: cancelled()
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PR_NUMBER: ${{ github.event.issue.pull_request && github.event.issue.number || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          PR_NUMBER: ${{ inputs.pr-number || (github.event.issue.pull_request && github.event.issue.number) || '' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           export GH_REPO="$GITHUB_REPOSITORY"

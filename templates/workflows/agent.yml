@@ -2,15 +2,24 @@ name: Agent
 # Starts the pipeline's agent on a ticket. The work is done by the pipeline's reusable
 # workflow (GoApps213/pipeline); this file decides when, and grants the permissions.
 # The number comes first so the pipeline's cancel.sh can find a ticket's runs.
-run-name: "#${{ github.event.issue.number }} ${{ github.event.issue.title }}"
+# A conflicts run has only the pull request's number, which cancel.sh doesn't look for.
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('PR #{0}: resolve conflicts with main', inputs.pr) || format('#{0} {1}', github.event.issue.number, github.event.issue.title) }}"
 on:
   issues:
     types: [labeled]
   issue_comment:
     types: [created]
+  # Started by the housekeeping workflow when a merge into main leaves an agent pull request
+  # in conflict with it (the pipeline's scripts/conflicts.sh)
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: The pull request whose conflicts with main to resolve
+        type: string
+        required: true
 
 concurrency:
-  group: agent-${{ github.event.issue.number }}
+  group: agent-${{ github.event.issue.number || inputs.pr }}
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +28,16 @@ jobs:
     #   - adding the ai-request or ai-approved label to an issue
     #   - replying on a ticket that is waiting for your answer
     #   - mentioning @agent in a comment on a pull request
-    # Comments the workflow posts come from the Actions bot, so they never retrigger it.
+    #   - starting it by hand on a pull request, as the housekeeping workflow does after a
+    #     merge leaves the pull request in conflict with main
+    # Comments the workflow posts come from the Actions bot, so they never retrigger it;
+    # a workflow_dispatch is the one event the bot can start it with.
     # Nothing starts for a closed ticket or pull request; closing a ticket is how it is cancelled.
     # "You" is the PIPELINE_OWNER variable, since the repo's owner is an organization.
     # With the variable unset, nothing starts.
     if: >-
+      (github.event_name == 'workflow_dispatch' && vars.PIPELINE_OWNER != '' &&
+        (github.actor == 'github-actions[bot]' || github.actor == vars.PIPELINE_OWNER)) ||
       github.event.sender.login == vars.PIPELINE_OWNER && github.event.issue.state == 'open' && (
         (github.event_name == 'issues' &&
           (github.event.label.name == 'ai-request' || github.event.label.name == 'ai-approved')) ||
@@ -39,4 +53,5 @@ jobs:
     uses: GoApps213/pipeline/.github/workflows/agent.yml@v1
     with:
       pipeline-owner: ${{ vars.PIPELINE_OWNER }}
+      pr-number: ${{ inputs.pr }}
     secrets: inherit

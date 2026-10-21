@@ -50,6 +50,22 @@ jobs:
           fi
           "$RUNNER_TEMP/p/scripts/status.sh" "$N" building "Merged; waiting for the build to start"
 
+  conflicts:
+    # a merge can leave other open pull requests conflicting with main: start an agent run
+    # to resolve them for each agent PR, and say so on any other
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      actions: write   # to start the agent's run
+    steps:
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
+      - run: '"$RUNNER_TEMP/p/scripts/conflicts.sh" "$MERGED"'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGED: ${{ github.event.pull_request.number }}
+
   closed-without-merging:
     # an agent PR closed without merging would otherwise leave its ticket "in review"
     if: >-
