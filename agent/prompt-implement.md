@@ -36,4 +36,11 @@ You are implementing a feature request for this iOS app. Follow CLAUDE.md.
   (except files under .agent/run/). CLAUDE.md and the files listed under "protected" in
   .agent/project.json, such as the Xcode project file, are also off limits; if the ticket can't be
   done without changing one of them, say so in .agent/run/questions.md and stop.
+- Keep the project's docs up to date: add an entry to docs/Changelog.md for the change, and update
+  docs/UserGuide.md for anything the person using the app sees differently. Create either file if
+  it is missing, starting with a heading and the first entry or section.
+- If the ticket implements a task in the project's plan (docs/Tasks/task-*.md), set that task's
+  Status to Done, tick it in its phase file and in docs/Tasks/README.md, and add a dated line to the
+  phase's Notes / Decisions if you decided something the task left open. Change nothing else in
+  the plan; the owner changes it through the Plan screen.
 - Finish by writing .agent/run/summary.md: what changed, how to try it, and every assumption you made.

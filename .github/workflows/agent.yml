@@ -38,8 +38,10 @@ jobs:
           persist-credentials: false
       # exec, so the runner's cancel signal goes to the script and not to a shell around it.
       # The script then stops the agent or the build it is waiting for (scripts/steps.sh).
-      - run: exec "$RUNNER_TEMP/pipeline/scripts/agent-run.sh"
+      # A project's plan issue (labelled ai-plan) gets a planning run; anything else a request run.
+      - run: exec "$RUNNER_TEMP/pipeline/scripts/$SCRIPT"
         env:
+          SCRIPT: ${{ contains(github.event.issue.labels.*.name, 'ai-plan') && 'plan-run.sh' || 'agent-run.sh' }}
           PIPELINE_DIR: ${{ runner.temp }}/pipeline
           ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
           PR_NUMBER: ${{ inputs.pr-number || (github.event.issue.pull_request && github.event.issue.number) || '' }}

@@ -2,8 +2,10 @@
 # The only thing that changes a ticket's state: swaps the ai:* label and appends a
 # line to the status comment, keeping a JSON copy hidden in the comment for the app.
 # Usage: status.sh <issue> <state> <message>
-# States: queued running needs-input in-review building released failed cancelled
+# States: queued running needs-input in-review building released failed cancelled, and idle
+#         for a plan issue between runs (scripts/plan-run.sh)
 # Optional env: SESSION_ID, PR_URL, BUILD_NUMBER are saved into the status data.
+#               HANDLED: on a plan issue, the newest comment the run has dealt with.
 #               USAGE_FILE: token counts from the adapter, one JSON object per line. They
 #               are added to the ticket's running total and to the step that was under
 #               way (the last event before this one), and the file is emptied.
@@ -43,7 +45,8 @@ fi
 
 # 4. Update the data and render the comment
 DATA=$(jq -c --arg s "$STATE" --arg m "$MSG" --arg t "$NOW" --argjson u "$USAGE" \
-  --arg sid "${SESSION_ID:-}" --arg pr "${PR_URL:-}" --arg b "${BUILD_NUMBER:-}" '
+  --arg sid "${SESSION_ID:-}" --arg pr "${PR_URL:-}" --arg b "${BUILD_NUMBER:-}" \
+  --arg h "${HANDLED:-}" '
   def plus_usage: reduce ($u | to_entries[]) as $e (. // {}; .[$e.key] = ((.[$e.key] // 0) + $e.value))
                   | .cost |= (. * 10000 | round / 10000);
   .state = $s
@@ -56,7 +59,8 @@ DATA=$(jq -c --arg s "$STATE" --arg m "$MSG" --arg t "$NOW" --argjson u "$USAGE"
     else . end
   | if $sid != "" then .session_id = $sid else . end
   | if $pr  != "" then .pr = $pr else . end
-  | if $b   != "" then .build = $b else . end' <<<"$DATA")
+  | if $b   != "" then .build = $b else . end
+  | if $h   != "" then .handled = ($h | tonumber) else . end' <<<"$DATA")
 
 BODY="$MARKER
 **Pipeline status:** \`$STATE\`

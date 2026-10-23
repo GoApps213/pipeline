@@ -35,6 +35,7 @@ ai-skip-review|FEF2C0|The agent's pull request skips the AI review
 ai-skip-ui-tests|FEF2C0|The agent adds no UI tests and verifies with the unit tests only
 ai-archived|ededed|Archived in GoBuild; the pipeline ignores it
 ai-mockup|0E8A16|Not used yet
+ai-plan|D4C5F9|The project's plan, talked over with the agent in GoBuild's Plan screen
 ai:queued|5319E7|Pipeline: waiting for the runner
 ai:running|BFD4F2|Pipeline: the agent is working on it
 ai:needs-input|0052CC|Pipeline: the agent has a question
@@ -43,6 +44,7 @@ ai:building|D93F0B|Pipeline: merged, and building for TestFlight
 ai:released|0052CC|Pipeline: on TestFlight
 ai:failed|1D76DB|Pipeline: the run stopped with an error
 ai:cancelled|cccccc|Pipeline: cancelled by the owner
+ai:idle|ededed|Pipeline: the plan's agent is waiting for the owner
 EOF
 done_ "Labels"
 

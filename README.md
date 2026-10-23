@@ -35,7 +35,7 @@ The caller workflows are in `templates/workflows/`, and a `project.json` to star
 
 Both are set on each repo, not on the organization: on GitHub Free, organization variables and secrets don't reach private repos' workflows, although the API lists them for those repos.
 - **`release` environment, limited to `main`:** `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_CONTENT`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`, and `TICKETKIT_GITHUB_TOKEN` for an app that files requests.
-- **Labels:** the pipeline's labels (`ai-request`, `ai-approved`, `ai-skip-review`, `ai-skip-ui-tests` and the `ai:*` states).
+- **Labels:** the pipeline's labels (`ai-request`, `ai-approved`, `ai-skip-review`, `ai-skip-ui-tests`, `ai-plan` and the `ai:*` states).
 - **Merges:** squash only, with the PR title and body as the message.
 
 ## Adding a project
@@ -49,6 +49,17 @@ It creates the labels, sets the Actions and merge settings, the `release` enviro
 - create the App Store Connect app record and run `fastlane match appstore --git_url https://github.com/GoApps213/ios-certs.git --app_identifier <bundle ID>`;
 - set the secrets;
 - add the repo to the app's GitHub token, after which GoBuild lists it as a project.
+
+## Planning runs
+
+Each project can have a plan: Markdown files in `docs/Tasks/` (a README linking every phase and task, a test plan, the phases and the tasks), with `docs/Changelog.md` and `docs/UserGuide.md`. The owner talks it over with the agent in GoBuild's Plan screen, through one open issue titled "Plan" and labelled `ai-plan`. The comment format and the app's side are in `docs/plan.md` in `GoApps213/gobuild`.
+
+- **What starts one:** adding `ai-plan` to an open issue, or the owner commenting on one that has it. The reusable `agent.yml` runs `scripts/plan-run.sh` instead of `agent-run.sh` for that issue.
+- **What it does:** it merges the plan pull request the owner approved, if it is still at the commit they approved. Then the agent (`agent/prompt-plan.md`) takes the owner's new messages into the plan on one open pull request from `ai/plan`, and posts its concerns. Only the owner's approval merges it.
+- **What it may change:** only the plan's files. Any other change fails the run before anything is pushed. Nothing is verified or built, and `release.yml` ignores `docs/**`.
+- **Its states:** `ai:running` while it works, `ai:idle` between runs, `ai:failed` after a failure. The status comment keeps the newest comment it handled, so the owner's next comment after a failure takes up what was missed.
+- **Templates:** the plan follows the templates in `agent/plan-templates/`, a copy of `docs/templates/` in `GoApps213/gobuild`. Change both together.
+- **The request agent:** it adds to the changelog and the user guide with every change, and ticks off a task it implemented in the plan.
 
 ## How a run stays contained
 
