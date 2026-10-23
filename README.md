@@ -9,8 +9,8 @@ This repo holds the shared parts. Each app repo calls them, and supplies what on
 | File | What it does |
 | --- | --- |
 | `.github/workflows/agent.yml` | Decides which labels and comments start the agent, then calls `agent.yml` here. Its `workflow_dispatch` trigger, with the pull request's number, is how housekeeping starts a run to resolve conflicts |
-| `.github/workflows/housekeeping.yml` | Calls `housekeeping.yml` here daily and when issues or pull requests close. After a merge, it checks the other open pull requests for conflicts with `main` (`scripts/conflicts.sh`): an agent pull request gets an agent run that merges `main` and resolves them; any other gets a comment |
-| `.github/workflows/release.yml` | Calls `release.yml` here on pushes to `main`, monthly and on demand |
+| `.github/workflows/housekeeping.yml` | Calls `housekeeping.yml` here daily and when issues or pull requests close. After a merge, it checks the other open pull requests for conflicts with `main` (`scripts/conflicts.sh`): an agent pull request gets an agent run that merges `main` and resolves them; any other gets a comment. Daily, it marks released any ticket still "building" whose merge is already on TestFlight (`scripts/released.sh`) |
+| `.github/workflows/release.yml` | Calls `release.yml` here on pushes to `main`, monthly and on demand. A newer push cancels a build under way; the build that replaces it covers its merges, and marks their tickets released through `scripts/released.sh` |
 | `.agent/project.json` | What to build and what to protect; see below |
 | `scripts/verify.sh` | Builds and runs the tests. Given test names, runs only those and refuses anything else. `templates/verify.sh` does this from `project.json`; an app that needs more, such as GoTask's Firebase emulators, writes its own |
 | `CLAUDE.md` | The agent's instructions for this app, including its test targets and example test names |

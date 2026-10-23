@@ -27,6 +27,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  released:
+    # release tickets left "building" by a release that a newer push replaced
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Get the pipeline
+        run: mkdir -p "$RUNNER_TEMP/p" && curl -fsSL --retry 3 "$PIPELINE_URL" | tar -xz --strip-components=1 -C "$RUNNER_TEMP/p"
+      - run: '"$RUNNER_TEMP/p/scripts/released.sh"'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   merged:
     # show the ticket as waiting for its build, even while the Mac's runner is stopped
     if: >-
