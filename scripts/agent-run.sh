@@ -228,7 +228,8 @@ main() {
       *,ai:needs-input,*)
         echo "Ticket #$N is waiting for an answer; the run after it merges main."; exit 0 ;;
     esac
-    rc=0; git merge-tree --write-tree --quiet origin/main "origin/$BRANCH" || rc=$?
+    # Not --quiet: with it, git 2.50 exits 0 even when the merge conflicts
+    rc=0; git merge-tree --write-tree origin/main "origin/$BRANCH" >/dev/null || rc=$?
     case "$rc" in
       0) echo "$BRANCH no longer conflicts with main; nothing to do."; exit 0 ;;
       1) ;;
