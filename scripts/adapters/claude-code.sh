@@ -15,6 +15,9 @@ case "$TASK" in
   implement) MODE=acceptEdits   # edits inside the working directory are accepted
              # verify.sh takes test names and refuses anything else, so its arguments are open
              ALLOWED="Bash(scripts/verify.sh),Bash(scripts/verify.sh:*),Bash(git diff:*),Bash(git status:*)" ;;
+  # The planner edits plan files; plan-run.sh refuses any change outside them
+  plan)      MODE=acceptEdits
+             ALLOWED="Bash(git diff:*),Bash(git status:*)" ;;
   # The reviewer writes only its review files; review.sh discards any other change
   review)    MODE=default
              ALLOWED="Edit(.agent/run/**),Bash(git diff:*)" ;;
