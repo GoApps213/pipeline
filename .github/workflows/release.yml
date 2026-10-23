@@ -59,12 +59,14 @@ jobs:
         run: fastlane beta
 
       - name: Mark the tickets released
-        if: success() && env.TICKETS != ''
+        if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           export BUILD_NUMBER=$(cat .build-number)
           for n in $TICKETS; do "$RUNNER_TEMP/pipeline/scripts/status.sh" "$n" released "On TestFlight (build $BUILD_NUMBER)"; done
+          # and any left "building" by a release this one replaced
+          "$RUNNER_TEMP/pipeline/scripts/released.sh" "$GITHUB_SHA"
 
       - name: Mark the tickets failed
         if: failure() && env.TICKETS != ''

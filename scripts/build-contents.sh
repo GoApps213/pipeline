@@ -36,7 +36,7 @@ else
   NOTES=$(for c in $COMMITS; do git log -1 --format='- %s' "$c"; done)
 fi
 
-echo "Commits in this build: $count; tickets: ${TICKETS:-none}" >&2
+echo "Last successful build: ${LAST:-none}; commits in this build: $count; tickets: ${TICKETS:-none}" >&2
 # The notes come from commit messages, which include the agent's summary. A random
 # delimiter keeps a line in them from ending the value and setting other variables.
 DELIM="NOTES_$(uuidgen)"
