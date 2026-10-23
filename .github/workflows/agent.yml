@@ -33,6 +33,10 @@ jobs:
             | tar -xz --strip-components=1 -C "$RUNNER_TEMP/pipeline"
       - uses: actions/checkout@v4
         with:
+          # main as it is now, not the commit the event fired on: a run can wait in the
+          # queue while a pull request changes a workflow, and a branch made from the older
+          # main then can't be pushed, since the token may not change workflow files
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           # the token is not left in .git/config, so the agent can't read it
           persist-credentials: false
