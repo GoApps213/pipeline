@@ -74,7 +74,7 @@ Each project can have a plan: Markdown files in `docs/Tasks/` (a README linking 
 | --- | --- |
 | `scripts/pipeline.sh` | Starts the runner, keeps the Mac awake, and watches every repo's runs. Ctrl-C stops it all |
 | `scripts/watch.sh` | The watcher on its own |
-| `scripts/model.sh` | Shows or chooses the agent's model; kept in `~/.config/agent-pipeline/model`. A request labelled `ai-model:<id>` (an id in `agent/models.json`) runs with that model instead |
+| `scripts/model.sh` | Shows or chooses the agent's model; kept in `~/.config/agent-pipeline/model`. A request labelled `ai-model:<id>` (an id in `agent/models.json`) runs with that model instead. Every run uses medium effort, set in `agent/settings.json` |
 
 ## Versions
 
