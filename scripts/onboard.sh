@@ -46,6 +46,11 @@ ai:failed|1D76DB|Pipeline: the run stopped with an error
 ai:cancelled|cccccc|Pipeline: cancelled by the owner
 ai:idle|ededed|Pipeline: the plan's agent is waiting for the owner
 EOF
+# The models a request can ask for, one ai-model:<id> label per entry in agent/models.json
+jq -r '.models[] | "ai-model:\(.id)|C5DEF5|The agent runs with \(.name)"' "$HERE/../agent/models.json" |
+while IFS='|' read -r name color description; do
+  gh label create "$name" -R "$REPO" --color "$color" --description "$description" --force >/dev/null
+done
 done_ "Labels"
 
 # 2. Actions: the workflow token is read-only unless a workflow asks for more, and may open pull requests

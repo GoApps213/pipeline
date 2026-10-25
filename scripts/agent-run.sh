@@ -10,7 +10,8 @@
 #      optional PR_NUMBER (set for a PR comment or a conflicts run), TRIGGER (the event name;
 #      workflow_dispatch for a conflicts run),
 #      ATTACHMENTS_TOKEN, PIPELINE_OWNER (the person asked to review the PR).
-# The agent and its model are the ones chosen with scripts/model.sh on this Mac.
+# The agent and its model are the ones chosen with scripts/model.sh on this Mac, unless the
+# ticket carries an ai-model:<id> label naming another entry in agent/models.json.
 #
 # The order below matters: map a PR to its ticket, check the ticket, gather it,
 # detect a resume, run the loop, then review.
@@ -193,11 +194,23 @@ main() {
     *) echo "Ticket #$N no longer has a request label; nothing to do."; exit 0 ;;
   esac
 
-  # Which agent and model: the one chosen with scripts/model.sh, looked up in main's list
-  if ! chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve); then
+  # Which agent and model: the one the ticket asks for with an ai-model:<id> label, or else the
+  # one chosen with scripts/model.sh. Either is looked up in main's list.
+  requested=$(tr ',' '\n' <<<"$ticket_labels" | sed -n 's/^ai-model://p' | head -1)
+  chosen=""
+  if [ -n "$requested" ]; then
+    chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve-id "$requested") || chosen=""
+  fi
+  if [ -z "$chosen" ] &&
+     ! chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve); then
     fail "The chosen model is not in the pipeline's agent/models.json; run scripts/model.sh on the Mac"
   fi
   AGENT_NAME=$(jq -r .name <<<"$chosen")
+  # The status lines name the agent; say so there when the ticket's model was not found
+  if [ -n "$requested" ] && [ "$(jq -r .id <<<"$chosen")" != "$requested" ]; then
+    echo "The ticket asks for model \"$requested\", which is not in agent/models.json; using $AGENT_NAME."
+    AGENT_NAME="$AGENT_NAME; the requested model \"$requested\" is not in the list"
+  fi
   export AGENT_ADAPTER="$(jq -r .adapter <<<"$chosen")"
   export AGENT_MODEL="$(jq -r .model <<<"$chosen")"
   ADAPTER="$TOOLS/scripts/adapters/$AGENT_ADAPTER.sh"
