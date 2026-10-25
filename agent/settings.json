@@ -1,4 +1,5 @@
 {
+  "effortLevel": "medium",
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "900000",
     "BASH_MAX_TIMEOUT_MS": "900000"
