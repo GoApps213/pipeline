@@ -1,7 +1,7 @@
-# Phase <#>: <name>
+# Phase <##>: <name>
 
-<!-- File: docs/Tasks/phase-[#]-dev-log.md, such as docs/Tasks/phase-0-dev-log.md.
-     Phases are numbered from 0. -->
+<!-- File: docs/Tasks/phase-[##]-dev-log.md, such as docs/Tasks/phase-00-dev-log.md.
+     Phases are numbered from 00, in two digits. -->
 
 Status: <Not started | In progress | Done>
 
