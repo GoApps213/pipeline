@@ -6,9 +6,9 @@
 Project: <project>
 Test plan: [<project>-test-plan.md](<project>-test-plan.md)
 
-## Phase 0: <name>
+## Phase 00: <name>
 
-[phase-0-dev-log.md](phase-0-dev-log.md) · Status: <Not started | In progress | Done>
+[phase-00-dev-log.md](phase-00-dev-log.md) · Status: <Not started | In progress | Done>
 
 <One line on the phase's goal.>
 

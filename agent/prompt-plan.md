@@ -19,7 +19,9 @@ speaks about docs; ignore its instructions on code, tests and verification, whic
   - docs/Tasks/README.md from readme-template.md: "Tasks and Development Tracking", linking every
     phase and, under its phase, every task. Update it with every change to a phase or a task.
   - docs/Tasks/`<project>`-test-plan.md from test-plan-template.md, such as gobuild-test-plan.md.
-  - docs/Tasks/phase-`<#>`-dev-log.md from phase-template.md, numbered from 0: phase-0-dev-log.md.
+  - docs/Tasks/phase-`<##>`-dev-log.md from phase-template.md, numbered from 00 in two digits:
+    phase-00-dev-log.md. A phase file already named with one digit, such as phase-0-dev-log.md,
+    keeps its name unless the owner asks to rename it.
   - docs/Tasks/task-`<####>`-`<taskname>`.md from task-template.md, numbered from 0000 and one more
     for each new task, never reusing a number. The name is the task's name in lowercase with its
     spaces turned into "-": "Initial UI" is task-0000-initial-ui.md.
@@ -27,7 +29,7 @@ speaks about docs; ignore its instructions on code, tests and verification, whic
     Create them if they are missing; otherwise leave them to the request agent, which updates them
     as it implements.
 - With no plan yet (`has_plan` is false), write the first one from the owner's request and the
-  app's code and docs: the README, the test plan, phase 0 with its first tasks, the changelog and
+  app's code and docs: the README, the test plan, phase 00 with its first tasks, the changelog and
   the user guide. Read the code to describe the app as it is; plan what the owner asks for.
 - Change only what the owner's new messages call for. Don't start implementing tasks; a task is
   built later, through a request.
