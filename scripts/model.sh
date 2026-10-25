@@ -5,6 +5,8 @@
 #        model.sh <id>        # set it without the menu
 #        model.sh --show      # print the current model's name
 #        model.sh --resolve   # print the current entry as JSON; agent-run.sh reads this
+#        model.sh --resolve-id <id>  # print that entry as JSON, or fail if it isn't in the list;
+#                                    # agent-run.sh reads this for a ticket's ai-model:<id> label
 # Optional env: MODELS_FILE (default agent/models.json in this repo),
 #               PIPELINE_MODEL_FILE (default ~/.config/agent-pipeline/model).
 # A choice made before the pipeline had its own repo, in ~/.config/gotask-pipeline/model,
@@ -54,7 +56,8 @@ save() {
 case "${1:-}" in
   --resolve) current_entry ;;
   --show)    current_entry | jq -r .name ;;
-  -*)        sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 2 ;;
+  --resolve-id) entry "${2:?"Usage: model.sh --resolve-id <id>"}" ;;
+  -*)        sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 2 ;;
   "")
     CURRENT=$(current_id)
     COUNT=$(jq '.models | length' "$MODELS_FILE")
