@@ -6,7 +6,7 @@
 #        model.sh --show      # print the current model's name
 #        model.sh --resolve   # print the current entry as JSON; agent-run.sh reads this
 #        model.sh --resolve-id <id>  # print that entry as JSON, or fail if it isn't in the list;
-#                                    # agent-run.sh reads this for a ticket's ai-model:<id> label
+#                                    # agent-run.sh and plan-run.sh read this for an issue's ai-model:<id> label
 # Optional env: MODELS_FILE (default agent/models.json in this repo),
 #               PIPELINE_MODEL_FILE (default ~/.config/agent-pipeline/model).
 # A choice made before the pipeline had its own repo, in ~/.config/gotask-pipeline/model,

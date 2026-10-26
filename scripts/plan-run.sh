@@ -145,11 +145,23 @@ main() {
     *) echo "Issue #$N is no longer a plan issue; nothing to do."; exit 0 ;;
   esac
 
-  # Which agent and model: the one chosen with scripts/model.sh on this Mac
-  if ! chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve); then
+  # Which agent and model: the one the plan issue asks for with an ai-model:<id> label, as a
+  # request does (GoBuild's Plan screen sets it), or else the one chosen with scripts/model.sh
+  requested=$(tr ',' '\n' <<<"$ticket_labels" | sed -n 's/^ai-model://p' | head -1)
+  chosen=""
+  if [ -n "$requested" ]; then
+    chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve-id "$requested") || chosen=""
+  fi
+  if [ -z "$chosen" ] &&
+     ! chosen=$(MODELS_FILE="$TOOLS/agent/models.json" "$TOOLS/scripts/model.sh" --resolve); then
     fail "The chosen model is not in the pipeline's agent/models.json; run scripts/model.sh on the Mac"
   fi
   AGENT_NAME=$(jq -r .name <<<"$chosen")
+  # The status lines name the agent; say so there when the issue's model was not found
+  if [ -n "$requested" ] && [ "$(jq -r .id <<<"$chosen")" != "$requested" ]; then
+    echo "The plan issue asks for model \"$requested\", which is not in agent/models.json; using $AGENT_NAME."
+    AGENT_NAME="$AGENT_NAME; the requested model \"$requested\" is not in the list"
+  fi
   export AGENT_ADAPTER="$(jq -r .adapter <<<"$chosen")"
   export AGENT_MODEL="$(jq -r .model <<<"$chosen")"
   ADAPTER="$TOOLS/scripts/adapters/$AGENT_ADAPTER.sh"
