@@ -12,7 +12,7 @@
 #   The targets are unit_tests and ui_tests in .agent/project.json. Anything else is refused,
 #   because the agent may pass arguments and nothing but test names may reach xcodebuild.
 # VERIFY_UNIT_ONLY=1 with no names runs only the unit tests.
-# VERIFY_DESTINATION overrides the simulator (default iPhone 17, iOS 26.5).
+# VERIFY_DESTINATION overrides the simulator (default iPhone 17, iOS 27.2).
 set -euo pipefail
 
 usage() {
@@ -29,7 +29,7 @@ for target in "$UNIT" "$UI"; do
   [ -z "$target" ] || [[ $target =~ ^$NAME$ ]] || { echo "$CONFIG: \"$target\" is not a test target name" >&2; exit 2; }
 done
 
-DESTINATION=${VERIFY_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=26.5}
+DESTINATION=${VERIFY_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=27.2}
 
 # Parallel testing is off so xcodebuild doesn't clone simulators
 XCODEBUILD=(xcodebuild test -project "$PROJECT" -scheme "$SCHEME"
