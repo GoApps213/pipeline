@@ -2,18 +2,19 @@
 # Runs one planning pass on a project's plan issue: the open issue labelled ai-plan that
 # GoBuild's Plan screen talks over with the agent (the format is in GoApps213/gobuild's
 # docs/plan.md). Called by .github/workflows/agent.yml instead of agent-run.sh for that
-# issue, when the owner adds ai-plan to it or comments on it.
+# issue, when someone adds ai-plan to it or a member comments on it.
 #
 # The plan is the Markdown files in docs/Tasks/, with docs/Changelog.md and docs/UserGuide.md.
 # The agent keeps its changes to them on one open pull request from ai/plan, adding to it as
-# the owner's messages come in. Only the owner's approval merges it: an "approve" comment
+# members' messages come in. Only a member's approval merges it: an "approve" comment
 # naming the commit they saw. Nothing is verified or built, and release.yml ignores docs/**.
 #
-# A run deals with the owner's comments since the newest one the last run handled, which the
+# A run deals with members' comments since the newest one the last run handled, which the
 # status comment's data keeps as "handled": first the latest approval, then any messages. A
-# run that fails leaves them unhandled, so the owner's next comment takes them up again.
-# Env: ISSUE_NUMBER, GH_TOKEN, GITHUB_REPOSITORY, PIPELINE_DIR (this pipeline, downloaded),
-#      PIPELINE_OWNER (whose comments count); optional TRIGGER (the event name: "issues" when
+# run that fails leaves them unhandled, so the next member's comment takes them up again.
+# A member owns the repo, is in the organization or is a collaborator, as in agent.yml.
+# Env: ISSUE_NUMBER, GH_TOKEN, GITHUB_REPOSITORY, PIPELINE_DIR (this pipeline, downloaded);
+#      optional TRIGGER (the event name: "issues" when
 #      the label was added).
 set -Eeuo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/steps.sh"
@@ -22,18 +23,20 @@ BRANCH=ai/plan
 BOT='github-actions[bot]'
 STATUS_MARKER='<!-- ai-status -->'
 
-# The helpers below read the issue's comments as a JSON array of {id, body, user}, oldest first.
+# The helpers below read the issue's comments as a JSON array of {id, body, user, association},
+# oldest first.
 # kind: the plan marker a comment starts with ("message", "approve", "concern", "review",
 # "updated"), or "" for none. data: the object on its data line, or {}.
 JQ_DEFS='
   def kind: (.body | sub("^\\s+"; "") | capture("^<!-- ai-plan:(?<k>[a-z]+) -->") | .k) // "";
   def data: (.body | capture("<!-- data: (?<d>\\{.*\\}) -->") | .d | fromjson?) // {};
+  def member: .association == "OWNER" or .association == "MEMBER" or .association == "COLLABORATOR";
   def text: .body | sub("^\\s*<!-- ai-plan:[a-z]+ -->"; "") | gsub("<!-- data: \\{.*\\} -->"; "")
             | sub("^\\s+"; "") | sub("\\s+$"; "");'
 
-# The owner's comments after comment $2
-owner_comments_after() {
-  jq -c --argjson after "$2" --arg owner "$3" '[.[] | select(.id > $after and .user == $owner)]' "$1"
+# Members' comments after comment $2
+member_comments_after() {
+  jq -c --argjson after "$2" --arg bot "$BOT" "$JQ_DEFS"'[.[] | select(.id > $after and .user != $bot and member)]' "$1"
 }
 
 # "<pr>\t<sha>" from the latest approval among the comments on stdin; nothing without one
@@ -42,21 +45,21 @@ latest_approval() {
                    | select(. != null) | "\(.pr)\t\(.sha)"'
 }
 
-# How many of the comments on stdin are messages: anything the owner wrote but an approval
+# How many of the comments on stdin are messages: anything a member wrote but an approval
 message_count() {
   jq "$JQ_DEFS"'[.[] | select(kind != "approve")] | length'
 }
 
 # The conversation since the plan was last merged, for the agent: who wrote each comment,
 # what kind it is, its text, and whether it came after comment $2, the last one handled. Only
-# the owner's ($3) and the agent's comments count; the status comment, the review comment
-# and approvals are left out.
+# members' and the agent's comments count; the status comment, the review comment and
+# approvals are left out.
 conversation() {
-  jq --arg bot "$BOT" --arg owner "$3" --arg status "$STATUS_MARKER" --argjson handled "$2" "$JQ_DEFS"'
+  jq --arg bot "$BOT" --arg status "$STATUS_MARKER" --argjson handled "$2" "$JQ_DEFS"'
     (map(select(.user == $bot and kind == "updated")) | last | .id // 0) as $since
-    | [.[] | select(.id > $since and (.user == $bot or .user == $owner)
+    | [.[] | select(.id > $since and (.user == $bot or member)
                     and (.body | startswith($status) | not) and kind != "review" and kind != "approve")
-       | {from: (if .user == $bot then "agent" else "owner" end),
+       | {from: (if .user == $bot then "agent" else .user end),
           kind: (kind | if . == "" then "message" else . end),
           new: (.id > $handled),
           text: text}]' "$1"
@@ -167,27 +170,27 @@ main() {
   ADAPTER="$TOOLS/scripts/adapters/$AGENT_ADAPTER.sh"
   [ -x "$ADAPTER" ] || fail "There is no adapter for $AGENT_NAME (scripts/adapters/$AGENT_ADAPTER.sh)"
 
-  # What the owner has said since the last run. COMMENTS stays as it was when the run started.
+  # What members have said since the last run. COMMENTS stays as it was when the run started.
   COMMENTS="$TOOLS/comments.json"
   fetch_comments() {
     gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" --paginate \
-      --jq '.[] | {id, body, user: .user.login}' | jq -s . > "$1"
+      --jq '.[] | {id, body, user: .user.login, association: .author_association}' | jq -s . > "$1"
   }
   fetch_comments "$COMMENTS"
   handled=$(jq -r --arg m "$STATUS_MARKER" 'map(select(.body | startswith($m))) | first | .body // ""' "$COMMENTS" \
     | sed -n 's/^<!-- data: \(.*\) -->$/\1/p' | jq -r '.handled // 0' 2>/dev/null || true)
   handled=${handled:-0}
   newest=$(jq '[.[].id] | max // 0' "$COMMENTS")
-  from_owner=$(owner_comments_after "$COMMENTS" "$handled" "${PIPELINE_OWNER:-}")
-  approval=$(latest_approval <<<"$from_owner")
-  messages=$(message_count <<<"$from_owner")
+  from_members=$(member_comments_after "$COMMENTS" "$handled")
+  approval=$(latest_approval <<<"$from_members")
+  messages=$(message_count <<<"$from_members")
   # Adding the label asks for the first plan, while the project has none
   first=""
   if [ "${TRIGGER:-}" = issues ] && ! git cat-file -e origin/main:docs/Tasks/README.md 2>/dev/null; then
     first=1
   fi
   if [ -z "$approval" ] && [ "$messages" -eq 0 ] && [ -z "$first" ]; then
-    echo "Nothing new from the owner on #$N; nothing to do."
+    echo "Nothing new from members on #$N; nothing to do."
     exit 0
   fi
 
@@ -236,7 +239,7 @@ main() {
     fi
   fi
 
-  # 2. The owner's messages: the agent takes them into the plan, on the plan pull request
+  # 2. Members' messages: the agent takes them into the plan, on the plan pull request
   if [ "$messages" -gt 0 ] || [ -n "$first" ]; then
     git fetch -q origin
     pr=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // ""')
@@ -268,7 +271,7 @@ main() {
     git config user.email "agent@users.noreply.github.com"
     cp -R "$TOOLS/agent/plan-templates" "$RUN/templates"
     gh issue view "$N" --json title,body > "$RUN/issue.json"
-    conversation "$COMMENTS" "$handled" "${PIPELINE_OWNER:-}" > "$RUN/conversation.json"
+    conversation "$COMMENTS" "$handled" > "$RUN/conversation.json"
     if [ -n "$pr" ]; then
       review_comment "$COMMENTS" | cut -f2- | jq -r . > "$RUN/review.md" 2>/dev/null || true
     fi
