@@ -24,32 +24,32 @@ concurrency:
 
 jobs:
   run:
-    # Only you can start the agent, by:
+    # Anyone with access to the repo can start the agent, by:
     #   - adding the ai-request or ai-approved label to an issue
-    #   - replying on a ticket that is waiting for your answer
+    #   - replying on a ticket that is waiting for an answer
     #   - mentioning @agent in a comment on a pull request
-    #   - adding the ai-plan label to an issue, or commenting on one that has it: the project's
-    #     plan issue, which GoBuild's Plan screen talks over with the agent (a planning run)
+    #   - adding the ai-plan label to an issue: the project's plan issue, which GoBuild's
+    #     Plan screen talks over with the agent (a planning run)
     #   - starting it by hand on a pull request, as the housekeeping workflow does after a
     #     merge leaves the pull request in conflict with main
+    # Adding a label or starting a workflow by hand already needs access. A comment counts
+    # when its author owns the repo, is in the organization or is a collaborator; the
+    # planning run reads only those people's comments (the pipeline's scripts/plan-run.sh).
     # Comments the workflow posts come from the Actions bot, so they never retrigger it;
     # a workflow_dispatch is the one event the bot can start it with.
     # Nothing starts for a closed ticket or pull request; closing a ticket is how it is cancelled.
-    # "You" is the PIPELINE_OWNER variable, since the repo's owner is an organization.
-    # With the variable unset, nothing starts.
     if: >-
-      (github.event_name == 'workflow_dispatch' && vars.PIPELINE_OWNER != '' &&
-        (github.actor == 'github-actions[bot]' || github.actor == vars.PIPELINE_OWNER)) ||
-      github.event.sender.login == vars.PIPELINE_OWNER && github.event.issue.state == 'open' && (
+      github.event_name == 'workflow_dispatch' ||
+      github.event.issue.state == 'open' && (
         (github.event_name == 'issues' &&
-          (github.event.label.name == 'ai-request' || github.event.label.name == 'ai-approved')) ||
-        (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
-          contains(github.event.issue.labels.*.name, 'ai:needs-input')) ||
-        (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
-          contains(github.event.comment.body, '@agent')) ||
-        (github.event_name == 'issues' && github.event.label.name == 'ai-plan') ||
-        (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
-          contains(github.event.issue.labels.*.name, 'ai-plan'))
+          (github.event.label.name == 'ai-request' || github.event.label.name == 'ai-approved' ||
+            github.event.label.name == 'ai-plan')) ||
+        (github.event_name == 'issue_comment' &&
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && (
+            (!github.event.issue.pull_request &&
+              (contains(github.event.issue.labels.*.name, 'ai:needs-input') ||
+                contains(github.event.issue.labels.*.name, 'ai-plan'))) ||
+            (github.event.issue.pull_request && contains(github.event.comment.body, '@agent'))))
       )
     permissions:
       contents: write

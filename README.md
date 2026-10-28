@@ -30,7 +30,7 @@ The caller workflows are in `templates/workflows/`, and a `project.json` to star
 
 ### Repo settings and secrets
 
-- **Repo variable `PIPELINE_OWNER`:** the person whose labels and comments start the agent, and who is asked to review each pull request. With it unset, nothing starts.
+- **Repo variable `PIPELINE_OWNER`:** the person asked to review each pull request. Anyone with access to the repo can start the agent: labels and starting the workflow by hand already need access, and a comment counts when its author owns the repo, is in the organization or is a collaborator (on a private repo, that includes read-only collaborators).
 - **Repo secret `ATTACHMENTS_TOKEN`:** contents read and write on the attachments repos. Without it, runs work but the agent doesn't get the ticket's images.
 
 Both are set on each repo, not on the organization: on GitHub Free, organization variables and secrets don't reach private repos' workflows, although the API lists them for those repos.
@@ -54,7 +54,7 @@ It creates the labels, sets the Actions and merge settings, the `release` enviro
 
 Each project can have a plan: Markdown files in `docs/Tasks/` (a README linking every phase and task, a test plan, the phases and the tasks), with `docs/Changelog.md` and `docs/UserGuide.md`. Anyone with access to the repo talks it over with the agent in GoBuild's Plan screen, through one open issue titled "Plan" and labelled `ai-plan`. The comment format and the app's side are in `docs/plan.md` in `GoApps213/gobuild`.
 
-- **What starts one:** adding `ai-plan` to an open issue, or a member commenting on one that has it: someone who owns the repo, is in the organization or is a collaborator. A project's `agent.yml` can narrow that, as the older ones do to `PIPELINE_OWNER`. The reusable `agent.yml` runs `scripts/plan-run.sh` instead of `agent-run.sh` for that issue.
+- **What starts one:** adding `ai-plan` to an open issue, or a member commenting on one that has it: someone who owns the repo, is in the organization or is a collaborator. The reusable `agent.yml` runs `scripts/plan-run.sh` instead of `agent-run.sh` for that issue.
 - **What it does:** it merges the plan pull request a member approved, if it is still at the commit they approved. Then the agent (`agent/prompt-plan.md`) takes members' new messages into the plan on one open pull request from `ai/plan`, and posts its concerns. Only a member's approval merges it.
 - **What it may change:** only the plan's files. Any other change fails the run before anything is pushed. Nothing is verified or built, and `release.yml` ignores `docs/**`.
 - **Its states:** `ai:running` while it works, `ai:idle` between runs, `ai:failed` after a failure. The status comment keeps the newest comment it handled, so the next member's comment after a failure takes up what was missed.
