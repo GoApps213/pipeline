@@ -1,4 +1,5 @@
 require "json"
+require "tmpdir"
 
 default_platform(:ios)
 
@@ -17,6 +18,33 @@ def progress(message)
   ENV["TICKETS"].to_s.split.each { |n| sh(status, n, "building", message) }
 rescue => e
   UI.important("Could not post progress: #{e.message}")
+end
+
+# Archives and exports with xcodebuild itself, for a project in Xcode 27's format (project.xcproj),
+# which build_app can't read: its xcodeproj gem knows only project.pbxproj. The project's own
+# signing settings name the match profile, as build_app relies on too. Returns the .ipa's path.
+def archive_with_xcodebuild(project, bundle_id, build_number)
+  out = File.join(ENV.fetch("RUNNER_TEMP", Dir.tmpdir), "build")
+  FileUtils.rm_rf(out)
+  archive = File.join(out, "#{PROJECT.fetch('scheme')}.xcarchive")
+  sh("xcodebuild", "archive", "-project", project, "-scheme", PROJECT.fetch("scheme"),
+     "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", archive,
+     "CURRENT_PROJECT_VERSION=#{build_number}", "-quiet")
+
+  options = File.join(out, "ExportOptions.plist")
+  File.write(options, {
+    "method" => "app-store-connect",
+    "teamID" => PROJECT.fetch("team_id"),
+    "signingStyle" => "manual",
+    "provisioningProfiles" => { bundle_id => "match AppStore #{bundle_id}" },
+    "uploadSymbols" => true
+  }.to_plist)
+  sh("xcodebuild", "-exportArchive", "-archivePath", archive, "-exportPath", out,
+     "-exportOptionsPlist", options, "-quiet")
+
+  ipa = Dir[File.join(out, "*.ipa")].first or UI.user_error!("The export made no .ipa in #{out}")
+  lane_context[SharedValues::IPA_OUTPUT_PATH] = ipa
+  ipa
 end
 
 platform :ios do
@@ -53,16 +81,22 @@ platform :ios do
     File.write(File.join(PROJECT_DIR, ".build-number"), build_number.to_s)
 
     progress("Archiving build #{build_number}")
-    build_app(
-      project: File.join(PROJECT_DIR, PROJECT.fetch("xcodeproj")),
-      scheme: PROJECT.fetch("scheme"),
-      export_method: "app-store",
-      xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
-    )
+    project = File.join(PROJECT_DIR, PROJECT.fetch("xcodeproj"))
+    ipa = if File.exist?(File.join(project, "project.pbxproj"))
+            build_app(
+              project: project,
+              scheme: PROJECT.fetch("scheme"),
+              export_method: "app-store",
+              xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
+            )
+          else
+            archive_with_xcodebuild(project, bundle_id, build_number)
+          end
 
     progress("Uploading to TestFlight; Apple then processes the build")
     upload_to_testflight(
       api_key: api_key,
+      ipa: ipa,
       app_identifier: bundle_id,
       changelog: ENV["WHAT_TO_TEST"].to_s[0, 3900]   # TestFlight's limit is 4000 characters
     )
