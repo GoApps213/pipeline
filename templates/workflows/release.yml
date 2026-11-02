@@ -13,8 +13,6 @@ on:
       - ".github/workflows/agent.yml"
       - ".github/workflows/housekeeping.yml"
       - "**.md"
-  schedule:
-    - cron: "0 9 1 * *"   # monthly, so builds never hit the 90-day expiry
   workflow_dispatch:
 
 # One build at a time, and a newer push replaces a build that is waiting or running.
