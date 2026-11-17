@@ -23,6 +23,7 @@ The caller workflows are in `templates/workflows/`, and a `project.json` to star
 | --- | --- |
 | `xcodeproj`, `scheme` | What the release lane builds |
 | `bundle_id`, `team_id` | The app's identity, and the profile match fetches from `ios-certs` |
+| `extra_bundle_ids` | Optional. The bundle IDs of the app's extensions, such as a widget, whose profiles match also fetches |
 | `unit_tests`, `ui_tests` | The test targets, for `templates/verify.sh` |
 | `attachments_repo` | The repo holding ticket images, in the same organization. Optional; the default is `<repo>-attachments` |
 | `protected` | Files the agent may not change, beyond the shared list (`scripts/`, `fastlane/`, `.github/`, `.claude/`, `.agent/project.json`, `CLAUDE.md`, `.mcp.json`). List the Xcode project file and anything else that runs code at build time |
