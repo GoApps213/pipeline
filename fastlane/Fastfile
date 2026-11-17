@@ -22,6 +22,8 @@ end
 platform :ios do
   lane :beta do
     bundle_id = PROJECT.fetch("bundle_id")
+    # Extensions, such as a widget, are signed with their own profiles
+    bundle_ids = [bundle_id] + PROJECT.fetch("extra_bundle_ids", [])
 
     # A leftover keychain from a crashed run would make create_keychain fail
     delete_keychain(name: KEYCHAIN) rescue nil
@@ -44,7 +46,7 @@ platform :ios do
 
     match(type: "appstore", readonly: true, api_key: api_key,
           git_url: CERTS_REPO, storage_mode: "git",
-          app_identifier: [bundle_id], team_id: PROJECT.fetch("team_id"),
+          app_identifier: bundle_ids, team_id: PROJECT.fetch("team_id"),
           keychain_name: KEYCHAIN, keychain_password: ENV["MATCH_PASSWORD"])
 
     # Passed to xcodebuild rather than written into the project, so the checkout stays clean
